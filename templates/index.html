@@ -463,12 +463,13 @@ function startEditItem(id, name) {
   const row = document.getElementById(`item-row-${id}`);
   row.innerHTML = `
     <div class="edit-row">
-      <input id="edit-input-${id}" value="${escAttr(name)}">
+      <input id="edit-input-${id}">
       <button class="sm-btn" onclick="saveEditItem(${id})">✓</button>
       <button class="sm-btn" onclick="renderItems()">✕</button>
     </div>
   `;
   const inp = document.getElementById(`edit-input-${id}`);
+  inp.value = name;
   inp.focus();
   inp.addEventListener('keydown', e => { if (e.key === 'Enter') saveEditItem(id); });
 }
@@ -590,12 +591,13 @@ function startEditLoc(id, name) {
   const row = document.getElementById(`loc-row-${id}`);
   row.innerHTML = `
     <div class="edit-row">
-      <input id="edit-input-${id}" value="${escAttr(name)}">
+      <input id="edit-input-${id}">
       <button class="sm-btn" onclick="saveEditLoc(${id})">✓</button>
       <button class="sm-btn" onclick="renderLocations()">✕</button>
     </div>
   `;
   const inp = document.getElementById(`edit-input-${id}`);
+  inp.value = name;
   inp.focus();
   inp.addEventListener('keydown', e => { if (e.key === 'Enter') saveEditLoc(id); });
 }
@@ -616,7 +618,7 @@ function esc(s) {
   return d.innerHTML;
 }
 function escAttr(s) {
-  return (s || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+  return (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
