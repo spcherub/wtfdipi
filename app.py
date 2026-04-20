@@ -3,6 +3,8 @@
 A Flask app for tracking where you put things.
 """
 
+import csv
+import io
 import os
 import sqlite3
 from datetime import datetime, timezone
@@ -98,6 +100,76 @@ def delete_location(loc_id):
     db.execute("DELETE FROM locations WHERE id = ?", (loc_id,))
     db.commit()
     return "", 204
+
+
+@app.route("/api/locations/import", methods=["POST"])
+def import_locations_csv():
+    """Import locations from a CSV file.
+
+    Accepts a multipart/form-data POST with a single file field named 'file'.
+    The CSV must have a header row containing a 'name' column (case-insensitive).
+    A plain single-column CSV with no header is also accepted — every row is
+    treated as a location name.
+
+    Returns a JSON summary:
+        {imported: N, skipped: N, errors: [{row: N, value: "...", reason: "..."}]}
+    """
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded — send a 'file' field"}), 400
+
+    f = request.files["file"]
+    if not f.filename:
+        return jsonify({"error": "No filename provided"}), 400
+    if not f.filename.lower().endswith(".csv"):
+        return jsonify({"error": "Only .csv files are accepted"}), 415
+
+    try:
+        content = f.read().decode("utf-8-sig")  # strip BOM if present
+    except UnicodeDecodeError:
+        return jsonify({"error": "File must be UTF-8 encoded"}), 400
+
+    reader = csv.DictReader(io.StringIO(content))
+
+    # Detect whether there is a 'name' header (case-insensitive).
+    # If the CSV has no recognised header we fall back to treating the first
+    # (and only expected) column as the location name.
+    fieldnames = [fn.strip().lower() for fn in (reader.fieldnames or [])]
+    has_name_header = "name" in fieldnames
+
+    if not has_name_header:
+        # Re-read as a plain list, no header
+        reader = csv.reader(io.StringIO(content))
+
+    db = get_db()
+    imported = 0
+    skipped = 0
+    errors = []
+
+    for row_num, row in enumerate(reader, start=2):  # start=2 accounts for header row
+        if has_name_header:
+            # DictReader row — normalise keys to lowercase
+            normalised = {k.strip().lower(): v.strip() for k, v in row.items()}
+            name = normalised.get("name", "")
+        else:
+            # Plain csv.reader row
+            if not row:
+                continue
+            name = row[0].strip()
+
+        if not name:
+            errors.append({"row": row_num, "value": "", "reason": "Empty name — skipped"})
+            skipped += 1
+            continue
+
+        try:
+            db.execute("INSERT INTO locations (name) VALUES (?)", (name,))
+            imported += 1
+        except sqlite3.IntegrityError:
+            errors.append({"row": row_num, "value": name, "reason": "Already exists — skipped"})
+            skipped += 1
+
+    db.commit()
+    return jsonify({"imported": imported, "skipped": skipped, "errors": errors}), 200
 
 
 # ── API: Items ────────────────────────────────────────────────────────────────

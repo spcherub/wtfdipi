@@ -155,6 +155,29 @@
   .empty { text-align: center; color: var(--text2); font-size: 13px; padding: 32px 16px; line-height: 1.6; }
 
   .hidden { display: none; }
+
+  /* CSV Import */
+  .import-row {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 16px;
+    padding: 10px 14px;
+    background: var(--card); border: 1px dashed var(--border);
+    border-radius: var(--radius); cursor: pointer; transition: border-color .15s;
+  }
+  .import-row:hover { border-color: var(--accent); }
+  .import-label {
+    font-size: 12px; color: var(--text2); cursor: pointer;
+    display: flex; align-items: center; gap: 8px; width: 100%;
+  }
+  .import-label .import-icon { font-size: 16px; }
+  .import-label .import-text { flex: 1; }
+  .import-status {
+    font-size: 11px; margin-top: 6px; padding: 0 2px;
+    display: flex; gap: 10px; flex-wrap: wrap;
+  }
+  .import-status .ok   { color: var(--green); }
+  .import-status .skip { color: var(--text2); }
+  .import-status .err  { color: var(--red); }
 </style>
 </head>
 <body>
@@ -217,6 +240,15 @@
         <input id="new-location" placeholder="New location description...">
         <button class="add-btn" id="add-loc-btn">+</button>
       </div>
+      <!-- CSV Import -->
+      <input type="file" id="csv-file-input" accept=".csv" class="hidden">
+      <div class="import-row" id="import-trigger" title="Import locations from a CSV file">
+        <label class="import-label" for="csv-file-input">
+          <span class="import-icon">📥</span>
+          <span class="import-text">Import locations from CSV…</span>
+        </label>
+      </div>
+      <div class="import-status hidden" id="import-status"></div>
       <div id="locations-list"></div>
     </div>
   </div>
@@ -442,6 +474,60 @@ async function saveEditItem(id) {
   await loadAll();
   renderItems();
 }
+
+// ── CSV IMPORT ───────────────────────────────────────────────────────────────
+document.getElementById('csv-file-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const statusEl = document.getElementById('import-status');
+  const triggerEl = document.getElementById('import-trigger');
+  const labelText = triggerEl.querySelector('.import-text');
+
+  labelText.textContent = `Importing ${file.name}…`;
+  statusEl.classList.add('hidden');
+  statusEl.innerHTML = '';
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  let result;
+  try {
+    const res = await fetch('/api/locations/import', { method: 'POST', body: formData });
+    result = await res.json();
+  } catch {
+    labelText.textContent = 'Import failed — could not reach server';
+    e.target.value = '';
+    return;
+  }
+
+  // Reset file input so the same file can be re-selected if needed
+  e.target.value = '';
+
+  if (result.error) {
+    labelText.textContent = 'Import locations from CSV…';
+    statusEl.innerHTML = `<span class="err">✕ ${esc(result.error)}</span>`;
+    statusEl.classList.remove('hidden');
+    return;
+  }
+
+  labelText.textContent = 'Import locations from CSV…';
+
+  const parts = [];
+  if (result.imported > 0) parts.push(`<span class="ok">✓ ${result.imported} imported</span>`);
+  if (result.skipped  > 0) parts.push(`<span class="skip">⊘ ${result.skipped} skipped</span>`);
+  if (result.errors && result.errors.some(err => !err.reason.includes('Already exists'))) {
+    const realErrors = result.errors.filter(err => !err.reason.includes('Already exists'));
+    parts.push(`<span class="err">! ${realErrors.length} error${realErrors.length > 1 ? 's' : ''}</span>`);
+  }
+  statusEl.innerHTML = parts.join('');
+  statusEl.classList.remove('hidden');
+
+  if (result.imported > 0) toast(`Imported ${result.imported} location${result.imported > 1 ? 's' : ''}`);
+
+  await loadAll();
+  renderLocations();
+});
 
 // ── LOCATIONS ────────────────────────────────────────────────────────────────
 function renderLocations() {
