@@ -96,7 +96,9 @@ def update_location(loc_id):
 @app.route("/api/locations/<int:loc_id>", methods=["DELETE"])
 def delete_location(loc_id):
     db = get_db()
-    db.execute("UPDATE items SET location_id = NULL, placed_at = NULL WHERE location_id = ?", (loc_id,))
+    count = db.execute("SELECT COUNT(*) FROM items WHERE location_id = ?", (loc_id,)).fetchone()[0]
+    if count:
+        return jsonify({"error": "Cannot delete a location that has items in it"}), 409
     db.execute("DELETE FROM locations WHERE id = ?", (loc_id,))
     db.commit()
     return "", 204

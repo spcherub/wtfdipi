@@ -409,11 +409,17 @@ async function unplace(itemId) {
 // ── ITEMS ────────────────────────────────────────────────────────────────────
 function renderItems() {
   const container = document.getElementById('items-list');
+  const query = document.getElementById('new-item').value.trim().toLowerCase();
+  const filtered = query ? items.filter(i => i.name.toLowerCase().includes(query)) : items;
   if (items.length === 0) {
     container.innerHTML = '<div class="empty">No items yet. Add things you want to track above.</div>';
     return;
   }
-  container.innerHTML = items.map(i => `
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="empty">No items match your search.</div>';
+    return;
+  }
+  container.innerHTML = filtered.map(i => `
     <div class="list-row" id="item-row-${i.id}">
       <div class="list-info">
         <span class="list-name">${esc(i.name)}</span>
@@ -432,6 +438,7 @@ function renderItems() {
 
 document.getElementById('add-item-btn').addEventListener('click', addItem);
 document.getElementById('new-item').addEventListener('keydown', e => { if (e.key === 'Enter') addItem(); });
+document.getElementById('new-item').addEventListener('input', () => renderItems());
 
 async function addItem() {
   const input = document.getElementById('new-item');
@@ -572,7 +579,8 @@ async function addLoc() {
 }
 
 async function deleteLoc(id) {
-  await api(`/locations/${id}`, { method: 'DELETE' });
+  const res = await api(`/locations/${id}`, { method: 'DELETE' });
+  if (res && res.error) { toast(res.error); return; }
   toast('Location removed');
   await loadAll();
   renderLocations();
