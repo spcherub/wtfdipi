@@ -4,46 +4,37 @@ A self-hosted item-location tracker. Runs on a Raspberry Pi (or any machine with
 
 ## Quick Start (Raspberry Pi)
 
-### 1. Copy the project to your Pi
-
-Copy the `wtfdipi/` folder to your Raspberry Pi (via USB, scp, git, etc.).
+### 1. Install uv (on the Pi)
 
 ```bash
-# Example: from your computer to the Pi over SSH
-scp -r wtfdipi/ pi@raspberrypi.local:~/wtfdipi/
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source ~/.bashrc
 ```
 
-### 2. Install Flask
+### 2. Copy the project to your Pi
 
 ```bash
-cd ~/wtfdipi
-pip install -r requirements.txt
+scp -r wtfdipi/ pi@raspberrypi.local:~/wtfdipi/
 ```
 
 ### 3. Run it
 
 ```bash
-python3 app.py
+cd ~/wtfdipi
+uv run python3 app.py
 ```
 
-The app starts on **http://0.0.0.0:5000**, so you can access it from:
-
-- The Pi itself: `http://localhost:5000`
-- Any device on your network: `http://<your-pi-ip>:5000`
-
-To find your Pi's IP address, run `hostname -I` on the Pi.
+The app starts on **http://0.0.0.0:8000**, accessible from any device on your network at `http://<your-pi-ip>:8000`. Run `hostname -I` on the Pi to find its IP.
 
 ---
 
 ## Run on Boot (optional)
 
-To have WTFDIPI start automatically when your Pi boots, create a systemd service:
+Create a systemd service so the app starts automatically on boot:
 
 ```bash
 sudo nano /etc/systemd/system/wtfdipi.service
 ```
-
-Paste this (adjust the paths/user if needed):
 
 ```ini
 [Unit]
@@ -53,14 +44,14 @@ After=network.target
 [Service]
 User=pi
 WorkingDirectory=/home/pi/wtfdipi
-ExecStart=/usr/bin/python3 /home/pi/wtfdipi/app.py
-Restart=always
+ExecStart=/home/pi/.local/bin/uv run python3 app.py
+Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-Then enable and start it:
+Enable and start it:
 
 ```bash
 sudo systemctl daemon-reload
@@ -68,47 +59,32 @@ sudo systemctl enable wtfdipi
 sudo systemctl start wtfdipi
 ```
 
-Check status anytime with:
+Useful commands:
 
 ```bash
-sudo systemctl status wtfdipi
-```
-
----
-
-## Project Structure
-
-```
-wtfdipi/
-├── app.py               # Flask server + REST API
-├── requirements.txt     # Python dependencies
-├── templates/
-│   └── index.html       # Full frontend (single file)
-└── wtfdipi.db           # SQLite database (created on first run)
+sudo systemctl status wtfdipi   # check if running
+sudo journalctl -u wtfdipi -f   # tail logs
+sudo systemctl restart wtfdipi  # restart after updates
 ```
 
 ---
 
 ## Usage
 
-1. Open the app in a browser on any device on your network
-2. Go to **📍 Locations** — add your storage spots
-3. Go to **🏷 Items** — add things you want to track
-4. Go to **📌 Put** — record where you're placing something
-5. Go to **🔍 Find** — search for an item to see where it is
+1. **Locations** — add your storage spots
+2. **Items** — add things you want to track
+3. **Put** — record where you're placing something
+4. **Find** — search for an item to see where it is
 
-Data is stored in `wtfdipi.db` (SQLite). Back it up anytime by copying that file.
+Data is stored in `wtfdipi.db` (SQLite). Back it up by copying that file.
 
 ---
 
-## Production Notes
+## Production
 
-The built-in Flask server works fine for personal/household use. If you want
-something more robust, you can run it behind **gunicorn**:
+For more robust deployments, run behind gunicorn:
 
 ```bash
 pip install gunicorn
-gunicorn -w 2 -b 0.0.0.0:5000 app:app
+gunicorn -w 2 -b 0.0.0.0:8000 app:app
 ```
-
-Update the `ExecStart` line in the systemd service accordingly.
